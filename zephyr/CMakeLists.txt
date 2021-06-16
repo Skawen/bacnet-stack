@@ -400,6 +400,9 @@ list(
       $<$<BOOL:${CONFIG_BACDL_BIP6}>:${BACNETSTACK_PORT}/bip6-init.c>
       $<$<BOOL:${CONFIG_BACDL_BIP}>:${BACNETSTACK_PORT}/datalink/bvlc.c>
       $<$<BOOL:${CONFIG_BACDL_ETHERNET}>:${BACNETSTACK_PORT}/ethernet.c>
+      $<$<BOOL:${CONFIG_BACDL_MSTP}>:${BACNETSTACK_PORT}/dlmstp.c>
+      $<$<BOOL:${CONFIG_BACDL_MSTP}>:${BACNETSTACK_PORT}/rs485.h>
+      $<$<BOOL:${CONFIG_BACDL_MSTP}>:${BACNETSTACK_PORT}/rs485.c>
       ${BACNETSTACK_PORT}/main.c
       ${BACNETSTACK_PORT}/mstimer-init.c
   )
