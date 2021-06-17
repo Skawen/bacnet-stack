@@ -27,6 +27,10 @@
  */
 #include "rs485.h"
 
+#include <device.h>
+#include <devicetree.h>
+#include <drivers/gpio.h>
+#include <drivers/uart.h>
 #include <init.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -37,11 +41,6 @@
 #include "bacnet/basic/sys/mstimer.h"
 #include "bacnet/bits.h"
 #include "bacnet/datalink/mstpdef.h"
-
-#include <device.h>
-#include <drivers/uart.h>
-#include <devicetree.h>
-#include <drivers/gpio.h>
 // #include <modbus_internal.h>
 
 #include <logging/log.h>
@@ -49,10 +48,11 @@ LOG_MODULE_REGISTER(skw_rs485_bacnet, LOG_LEVEL_INF);
 
 /* Using modbus context for handling rs485 communication */
 static int rs485_iface;
-const struct device *rs485_uart;
-struct device *rs485_gpio;
+const struct device *rs485_uart_dev;
+const struct device *rs485_gpio_dev;
 
 #define RS485_PIN_DE 10
+#define RS485_PIN_RE 12
 
 // struct modbus_context *rs485_ctx;
 
@@ -125,9 +125,59 @@ bool rs485_receive_error(void) {
   return false;
 }
 
+static void tx_isr(void) {
+  static struct net_buf *buf;
+  int len;
+  rs485_rts_enable(false);
+  /* disable the USART to generate interrupts on TX complete */
+  uart_irq_tx_disable(rs485_uart_dev);
+  /* enable the USART to generate interrupts on RX not empty */
+  uart_irq_rx_enable(rs485_uart_dev);
+
+  /*
+	if (!buf) {
+		buf = net_buf_get(&uart_tx_queue, K_NO_WAIT);
+		if (!buf) {
+			uart_irq_tx_disable(rs485_uart_dev);
+			return;
+		}
+	}
+
+	len = uart_fifo_fill(rs485_uart_dev, buf->data, buf->len);
+	net_buf_pull(buf, len);
+	if (!buf->len) {
+		net_buf_unref(buf);
+		buf = NULL;
+	}
+*/
+}
+
 /**
  * @brief USARTx interrupt handler sub-routine
  */
+static void rs485_uart_isr(const struct device *unused, void *user_data) {
+  ARG_UNUSED(unused);
+  ARG_UNUSED(user_data);
+
+  if (!(uart_irq_rx_ready(rs485_uart_dev) ||
+        uart_irq_tx_ready(rs485_uart_dev))) {
+    LOG_DBG("spurious interrupt");
+  }
+
+  if (uart_irq_tx_ready(rs485_uart_dev)) {
+    tx_isr();
+  }
+
+  if (uart_irq_rx_ready(rs485_uart_dev)) {
+    /*
+    data_byte = USART_ReceiveData(USART6);
+    if (!Transmitting) {
+      FIFO_Put(&Receive_Queue, data_byte);
+      RS485_Receive_Bytes++;
+    }
+    */
+  }
+}
 #if 0
 void USART6_IRQHandler(void)
 {
@@ -209,9 +259,11 @@ static void rs485_serial_tx_on(struct modbus_context *ctx)
 void rs485_rts_enable(bool enable) {
   Transmitting = enable;
   if (Transmitting) {
-    gpio_pin_set(rs485_gpio, RS485_PIN_DE, 1);
+    gpio_pin_set(rs485_gpio_dev, RS485_PIN_DE, 1);
+    gpio_pin_set(rs485_gpio_dev, RS485_PIN_RE, 1);
   } else {
-    gpio_pin_set(rs485_gpio, RS485_PIN_DE, 0);
+    gpio_pin_set(rs485_gpio_dev, RS485_PIN_DE, 0);
+    gpio_pin_set(rs485_gpio_dev, RS485_PIN_RE, 0);
   }
 }
 
@@ -230,7 +282,7 @@ bool rs485_rts_enabled(void) {
  * @return true if a byte is available, with the byte in the parameter
  */
 bool rs485_byte_available(uint8_t *data_register) {
-  int rx = uart_fifo_read(rs485_uart, data_register, 1);
+  int rx = uart_fifo_read(rs485_uart_dev, data_register, 1);
 
   LOG_DBG("read %d req %d", rx, 1);
 
@@ -255,7 +307,7 @@ bool rs485_byte_available(uint8_t *data_register) {
  * @return true if added to queue
  */
 bool rs485_bytes_send(uint8_t *buffer, uint16_t nbytes) {
-  int len = uart_fifo_fill(rs485_uart, buffer, nbytes);
+  int len = uart_fifo_fill(rs485_uart_dev, buffer, nbytes);
   if (len > 0) {
     rs485_silence_reset();
     rs485_rts_enable(true);
@@ -285,6 +337,24 @@ bool rs485_bytes_send(uint8_t *buffer, uint16_t nbytes) {
  * @brief Configures the baud rate of the USART
  */
 static void rs485_baud_rate_configure(void) {
+  struct uart_config uart_cfg;
+
+  if (rs485_uart_dev == NULL) {
+    LOG_ERR("Failed to get UART device BACNET");
+    /// log_strdup(cfg->dev_name));
+    return;
+  }
+
+  uart_cfg.baudrate = Baud_Rate;
+  uart_cfg.flow_ctrl = UART_CFG_FLOW_CTRL_NONE;
+  uart_cfg.data_bits = UART_CFG_DATA_BITS_8;
+  uart_cfg.parity = UART_CFG_PARITY_NONE;
+  uart_cfg.stop_bits = UART_CFG_STOP_BITS_1;
+
+  if (uart_configure(rs485_uart_dev, &uart_cfg) != 0) {
+    LOG_ERR("Failed to configure BACNET UART");
+  }
+
 #if 0
   USART_InitTypeDef USART_InitStructure;
 
@@ -354,6 +424,24 @@ uint32_t rs485_bytes_received(void) {
  * @brief Initialize the USART for RS485
  */
 void rs485_init(void) {
+  rs485_gpio_dev = device_get_binding("GPIO_1");
+  int ret;
+  if ((ret = gpio_pin_configure(rs485_gpio_dev, RS485_PIN_DE, GPIO_OUTPUT_ACTIVE)) < 0) {
+    return;
+  }
+  if ((ret = gpio_pin_configure(rs485_gpio_dev, RS485_PIN_RE, GPIO_OUTPUT_ACTIVE)) < 0) {
+    return;
+  }
+
+  rs485_uart_dev = device_get_binding("BACNET");
+  uart_irq_rx_disable(rs485_uart_dev);
+  uart_irq_tx_disable(rs485_uart_dev);
+
+  uart_irq_callback_set(rs485_uart_dev, rs485_uart_isr);
+
+  uart_irq_rx_enable(rs485_uart_dev);
+  uart_irq_tx_enable(rs485_uart_dev);
+
 #if 0
   GPIO_InitTypeDef GPIO_InitStructure;
   NVIC_InitTypeDef NVIC_InitStructure;
