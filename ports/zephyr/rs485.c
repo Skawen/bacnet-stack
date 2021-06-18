@@ -44,7 +44,7 @@
 // #include <modbus_internal.h>
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(skw_rs485_bacnet, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(skw_rs485_bacnet, LOG_LEVEL_DBG);
 
 /* Using modbus context for handling rs485 communication */
 static int rs485_iface;
@@ -128,11 +128,20 @@ bool rs485_receive_error(void) {
 static void tx_isr(void) {
   static struct net_buf *buf;
   int len;
-  rs485_rts_enable(false);
-  /* disable the USART to generate interrupts on TX complete */
-  uart_irq_tx_disable(rs485_uart_dev);
-  /* enable the USART to generate interrupts on RX not empty */
-  uart_irq_rx_enable(rs485_uart_dev);
+
+  if (FIFO_Count(&Transmit_Queue)) {
+    uint8_t c = FIFO_Get(&Transmit_Queue);
+    len = uart_fifo_fill(rs485_uart_dev, &c, 1);
+    RS485_Transmit_Bytes += 1;
+    rs485_silence_reset();
+  } else {
+    rs485_rts_enable(false);
+    /* disable the USART to generate interrupts on TX complete */
+    uart_irq_tx_disable(rs485_uart_dev);
+    /* enable the USART to generate interrupts on RX not empty */
+    uart_irq_rx_enable(rs485_uart_dev);
+  }
+
 
   /*
 	if (!buf) {
@@ -169,13 +178,15 @@ static void rs485_uart_isr(const struct device *unused, void *user_data) {
   }
 
   if (uart_irq_rx_ready(rs485_uart_dev)) {
-    /*
-    data_byte = USART_ReceiveData(USART6);
+		uint8_t c;
+		if (uart_fifo_read(rs485_uart_dev, &c, 1) != 1) {
+			LOG_ERR("Failed to read UART");
+			return;
+		}
     if (!Transmitting) {
-      FIFO_Put(&Receive_Queue, data_byte);
+      FIFO_Put(&Receive_Queue, c);
       RS485_Receive_Bytes++;
     }
-    */
   }
 }
 #if 0
@@ -282,22 +293,27 @@ bool rs485_rts_enabled(void) {
  * @return true if a byte is available, with the byte in the parameter
  */
 bool rs485_byte_available(uint8_t *data_register) {
+#if 0
+  if (!rs485_uart_dev) {
+    LOG_ERR("BACNET read UART device not initialized!");
+    return false;
+  }
   int rx = uart_fifo_read(rs485_uart_dev, data_register, 1);
 
   LOG_DBG("read %d req %d", rx, 1);
 
   return rx == 1 ? true : false;
-#if 0
-  bool data_available = false; /* return value */
-    if (!FIFO_Empty(&Receive_Queue)) {
-        if (data_register) {
-            *data_register = FIFO_Get(&Receive_Queue);
-        }
-        rs485_silence_reset();
-        data_available = true;
-    }
-  return data_available;
 #endif
+
+  bool data_available = false; /* return value */
+  if (!FIFO_Empty(&Receive_Queue)) {
+    if (data_register) {
+      *data_register = FIFO_Get(&Receive_Queue);
+    }
+    rs485_silence_reset();
+    data_available = true;
+  }
+  return data_available;
 }
 
 /**
@@ -307,30 +323,39 @@ bool rs485_byte_available(uint8_t *data_register) {
  * @return true if added to queue
  */
 bool rs485_bytes_send(uint8_t *buffer, uint16_t nbytes) {
+#if 0
+  if (!rs485_uart_dev) {
+    LOG_ERR("BACNET send UART device not initialized!");
+    return false;
+  }
+  rs485_silence_reset();
+  rs485_rts_enable(true);
   int len = uart_fifo_fill(rs485_uart_dev, buffer, nbytes);
-  if (len > 0) {
+  return (len > 0);
+#endif
+  bool status = false;
+  if (buffer && (nbytes > 0)) {
     rs485_silence_reset();
     rs485_rts_enable(true);
-    return true;
-  }
-  return false;
-
-#if 0
-  bool status = false;
-    if (buffer && (nbytes > 0)) {
-        if (FIFO_Add(&Transmit_Queue, buffer, nbytes)) {
-            rs485_silence_reset();
-            rs485_rts_enable(true);
-            /* disable the USART to generate interrupts on RX not empty */
-            USART_ITConfig(USART6, USART_IT_RXNE, DISABLE);
-            /* enable the USART to generate interrupts on TX empty */
-            USART_ITConfig(USART6, USART_IT_TXE, ENABLE);
-            /* TXE interrupt will load the first byte */
-            status = true;
-        }
+    int len = uart_fifo_fill(rs485_uart_dev, buffer, nbytes);
+    RS485_Transmit_Bytes += len;
+    status = true;
+    nbytes -= len;
+    if (nbytes > 0) {
+      buffer += len;
+      if (FIFO_Add(&Transmit_Queue, buffer, nbytes)) {
+        rs485_silence_reset();
+    #if 0
+        /* disable the USART to generate interrupts on RX not empty */
+        USART_ITConfig(USART6, USART_IT_RXNE, DISABLE);
+        /* enable the USART to generate interrupts on TX empty */
+        USART_ITConfig(USART6, USART_IT_TXE, ENABLE);
+        /* TXE interrupt will load the first byte */
+    #endif
+      }
     }
+  }
   return status;
-#endif
 }
 
 /**
@@ -424,15 +449,32 @@ uint32_t rs485_bytes_received(void) {
  * @brief Initialize the USART for RS485
  */
 void rs485_init(void) {
+  LOG_DBG("rs485_init");
+
+  /* initialize the Rx and Tx byte queues */
+  FIFO_Init(&Receive_Queue, &Receive_Queue_Data[0],
+            (unsigned)sizeof(Receive_Queue_Data));
+  FIFO_Init(&Transmit_Queue, &Transmit_Queue_Data[0],
+            (unsigned)sizeof(Transmit_Queue_Data));
+
   rs485_gpio_dev = device_get_binding("GPIO_1");
-  int ret;
-  if ((ret = gpio_pin_configure(rs485_gpio_dev, RS485_PIN_DE, GPIO_OUTPUT_ACTIVE)) < 0) {
+  if (rs485_gpio_dev == NULL) {
+		LOG_ERR("Failed to get GPIO_1 binding");
     return;
   }
-  if ((ret = gpio_pin_configure(rs485_gpio_dev, RS485_PIN_RE, GPIO_OUTPUT_ACTIVE)) < 0) {
+  int ret;
+  ret = gpio_pin_configure(rs485_gpio_dev, RS485_PIN_DE, GPIO_OUTPUT_ACTIVE);
+  if (ret < 0) {
+		LOG_ERR("Failed to configure RS485_PIN_DE %d", ret);
+    return;
+  }
+  ret = gpio_pin_configure(rs485_gpio_dev, RS485_PIN_RE, GPIO_OUTPUT_ACTIVE);
+  if (ret < 0) {
+		LOG_ERR("Failed to configure RS485_PIN_RE %d", ret);
     return;
   }
 
+  LOG_DBG("Getting BACNET binding");
   rs485_uart_dev = device_get_binding("BACNET");
   uart_irq_rx_disable(rs485_uart_dev);
   uart_irq_tx_disable(rs485_uart_dev);
@@ -441,6 +483,10 @@ void rs485_init(void) {
 
   uart_irq_rx_enable(rs485_uart_dev);
   uart_irq_tx_enable(rs485_uart_dev);
+
+  rs485_baud_rate_set(Baud_Rate);
+
+  rs485_silence_reset();
 
 #if 0
   GPIO_InitTypeDef GPIO_InitStructure;
