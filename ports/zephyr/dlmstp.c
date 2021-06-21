@@ -48,6 +48,9 @@
 #include "bacnet/basic/sys/ringbuf.h"
 #include "bacnet/basic/sys/mstimer.h"
 
+#include <logging/log.h>
+LOG_MODULE_REGISTER(bacnet_mstp, LOG_LEVEL_INF);
+
 /* This file has been customized for use with small microprocessors */
 /* Assumptions:
     Only one MS/TP datalink layer
@@ -626,6 +629,7 @@ static void MSTP_Receive_Frame_FSM(void)
                         if (Receive_State == MSTP_RECEIVE_STATE_DATA) {
                             /* ForUs */
                             MSTP_Flag.ReceivedValidFrame = true;
+                            LOG_DBG("BACnet packet received %d %d %d %d", FrameType, DestinationAddress, SourceAddress, DataLength);
                         } else {
                             /* NotForUs */
                             MSTP_Flag.ReceivedValidFrameNotForUs = true;

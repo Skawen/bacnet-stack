@@ -44,7 +44,7 @@
 // #include <modbus_internal.h>
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(bacnet_rs485, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(bacnet_rs485, LOG_LEVEL_INF);
 
 /* Using modbus context for handling rs485 communication */
 static int rs485_iface;
@@ -63,10 +63,8 @@ static FIFO_BUFFER Receive_Queue;
 
 /* buffer for storing bytes to transmit */
 /* BACnet MAX_MPDU for MS/TP is 501 bytes */
-#ifdef RS485_USE_TRANSMIT_QUEUE
 static uint8_t Transmit_Queue_Data[512];
 static FIFO_BUFFER Transmit_Queue;
-#endif
 
 /* baud rate of the UART interface */
 static uint32_t Baud_Rate = 38400;
@@ -143,17 +141,25 @@ bool rs485_receive_error(void) {
 
 static void tx_isr(void) {
   static struct net_buf *buf;
-  int len;
 
-  #ifdef RS485_USE_TRANSMIT_QUEUE
+  int len;
+  uint8_t c;
   if (FIFO_Count(&Transmit_Queue)) {
-    uint8_t c = FIFO_Get(&Transmit_Queue);
-    len = uart_fifo_fill(rs485_uart_dev, &c, 1);
-    RS485_Transmit_Bytes += 1;
-    rs485_silence_reset();
-  } else 
-  #endif
-  {
+    // copy byte-by-byte to uart
+    while (FIFO_Count(&Transmit_Queue)) {
+      c = FIFO_Peek(&Transmit_Queue);
+      len = uart_fifo_fill(rs485_uart_dev, &c, 1);
+      if (len) {
+        // remove the byte from buffer
+        FIFO_Get(&Transmit_Queue);
+        RS485_Transmit_Bytes += 1;
+        rs485_silence_reset();
+      } else {
+        // couldn't copy more from FIFO to uart
+        break;
+      }
+    }
+  } else {
     rs485_rts_enable(false);
     /* disable the USART to generate interrupts on TX complete */
     uart_irq_tx_disable(rs485_uart_dev);
@@ -361,23 +367,25 @@ bool rs485_bytes_send(uint8_t *buffer, uint16_t nbytes) {
     // LOG_DBG("rs485_bytes_send %d", nbytes);
     rs485_silence_reset();
     rs485_rts_enable(true);
-    int len = uart_fifo_fill(rs485_uart_dev, buffer, nbytes);
-    /* enable the USART to generate interrupts on TX complete */
-    uart_irq_tx_enable(rs485_uart_dev);
-    /* disable the USART to generate interrupts on RX not empty */
-    uart_irq_rx_disable(rs485_uart_dev);
+    if (FIFO_Count(&Transmit_Queue) == 0) {
+      int len = uart_fifo_fill(rs485_uart_dev, buffer, nbytes);
+      /* enable the USART to generate interrupts on TX complete */
+      uart_irq_tx_enable(rs485_uart_dev);
+      /* disable the USART to generate interrupts on RX not empty */
+      uart_irq_rx_disable(rs485_uart_dev);
 
-    RS485_Transmit_Bytes += len;
-    status = true;
-    nbytes -= len;
-    if (nbytes > 0) {
-      LOG_ERR("BACNET UART FIFO full %d", nbytes);
-#ifdef RS485_USE_TRANSMIT_QUEUE      
+      RS485_Transmit_Bytes += len;
+      status = true;
+      nbytes -= len;
       buffer += len;
+    }
+    if (nbytes > 0) {
+      LOG_INF("BACNET UART FIFO full %d", nbytes);
+      // add remaining bytes to FIFO
       if (FIFO_Add(&Transmit_Queue, buffer, nbytes)) {
+        status = true;
         rs485_silence_reset();
       }
-#endif        
     }
   }
   return status;
@@ -479,10 +487,8 @@ void rs485_init(void) {
   /* initialize the Rx and Tx byte queues */
   FIFO_Init(&Receive_Queue, &Receive_Queue_Data[0],
             (unsigned)sizeof(Receive_Queue_Data));
-#ifdef RS485_USE_TRANSMIT_QUEUE            
   FIFO_Init(&Transmit_Queue, &Transmit_Queue_Data[0],
             (unsigned)sizeof(Transmit_Queue_Data));
-#endif
 
   rs485_gpio_dev = device_get_binding("GPIO_1");
   if (rs485_gpio_dev == NULL) {
