@@ -44,7 +44,7 @@
 // #include <modbus_internal.h>
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(skw_rs485_bacnet, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(bacnet_rs485, LOG_LEVEL_DBG);
 
 /* Using modbus context for handling rs485 communication */
 static int rs485_iface;
@@ -63,8 +63,10 @@ static FIFO_BUFFER Receive_Queue;
 
 /* buffer for storing bytes to transmit */
 /* BACnet MAX_MPDU for MS/TP is 501 bytes */
+#ifdef RS485_USE_TRANSMIT_QUEUE
 static uint8_t Transmit_Queue_Data[512];
 static FIFO_BUFFER Transmit_Queue;
+#endif
 
 /* baud rate of the UART interface */
 static uint32_t Baud_Rate = 38400;
@@ -77,12 +79,16 @@ static volatile uint32_t RS485_Receive_Bytes;
 
 /* amount of silence on the wire */
 static struct mstimer Silence_Timer;
+static bool Silence_Timer_Reported = false;
+static bool Turnaround_Timer_Reported = false;
 
 /**
  * @brief Reset the silence on the wire timer.
  */
 void rs485_silence_reset(void) {
   mstimer_set(&Silence_Timer, 0);
+  Silence_Timer_Reported = false;
+  Turnaround_Timer_Reported = false;
 }
 
 /**
@@ -91,7 +97,12 @@ void rs485_silence_reset(void) {
  * @return true if the amount of time has elapsed
  */
 bool rs485_silence_elapsed(uint32_t interval) {
-  return (mstimer_elapsed(&Silence_Timer) > interval);
+  bool result = mstimer_elapsed(&Silence_Timer) > interval;
+  if (result && !Silence_Timer_Reported) {
+    Silence_Timer_Reported = true;
+    LOG_DBG("rs485_silence_elapsed %d", Transmitting);
+  }
+  return result;
 }
 
 /**
@@ -114,7 +125,12 @@ static uint16_t rs485_turnaround_time(void) {
  * @return true if turnaround time has expired
  */
 bool rs485_turnaround_elapsed(void) {
-  return (mstimer_elapsed(&Silence_Timer) > rs485_turnaround_time());
+  bool result = (mstimer_elapsed(&Silence_Timer) > rs485_turnaround_time());
+  if (result && !Turnaround_Timer_Reported) {
+    Turnaround_Timer_Reported = true;
+    LOG_DBG("rs485_turnaround_elapsed %d", Transmitting);
+  }
+  return result;
 }
 
 /**
@@ -129,12 +145,15 @@ static void tx_isr(void) {
   static struct net_buf *buf;
   int len;
 
+  #ifdef RS485_USE_TRANSMIT_QUEUE
   if (FIFO_Count(&Transmit_Queue)) {
     uint8_t c = FIFO_Get(&Transmit_Queue);
     len = uart_fifo_fill(rs485_uart_dev, &c, 1);
     RS485_Transmit_Bytes += 1;
     rs485_silence_reset();
-  } else {
+  } else 
+  #endif
+  {
     rs485_rts_enable(false);
     /* disable the USART to generate interrupts on TX complete */
     uart_irq_tx_disable(rs485_uart_dev);
@@ -169,11 +188,12 @@ static void rs485_uart_isr(const struct device *unused, void *user_data) {
   ARG_UNUSED(user_data);
 
   if (!(uart_irq_rx_ready(rs485_uart_dev) ||
-        uart_irq_tx_ready(rs485_uart_dev))) {
+        uart_irq_tx_complete(rs485_uart_dev))) {
     LOG_DBG("spurious interrupt");
   }
 
-  if (uart_irq_tx_ready(rs485_uart_dev)) {
+  if (uart_irq_tx_complete(rs485_uart_dev)) {
+    LOG_DBG("rs485_uart_isr tx complete interrupt");
     tx_isr();
   }
 
@@ -268,6 +288,9 @@ static void rs485_serial_tx_on(struct modbus_context *ctx)
  * @param enable - true to set DE and /RE high, false to set /DE and RE low
  */
 void rs485_rts_enable(bool enable) {
+  if (Transmitting != enable) {
+    LOG_DBG("rs485_rts_enable changed %d", enable);
+  }
   Transmitting = enable;
   if (Transmitting) {
     gpio_pin_set(rs485_gpio_dev, RS485_PIN_DE, 1);
@@ -335,24 +358,26 @@ bool rs485_bytes_send(uint8_t *buffer, uint16_t nbytes) {
 #endif
   bool status = false;
   if (buffer && (nbytes > 0)) {
+    // LOG_DBG("rs485_bytes_send %d", nbytes);
     rs485_silence_reset();
     rs485_rts_enable(true);
     int len = uart_fifo_fill(rs485_uart_dev, buffer, nbytes);
+    /* enable the USART to generate interrupts on TX complete */
+    uart_irq_tx_enable(rs485_uart_dev);
+    /* disable the USART to generate interrupts on RX not empty */
+    uart_irq_rx_disable(rs485_uart_dev);
+
     RS485_Transmit_Bytes += len;
     status = true;
     nbytes -= len;
     if (nbytes > 0) {
+      LOG_ERR("BACNET UART FIFO full %d", nbytes);
+#ifdef RS485_USE_TRANSMIT_QUEUE      
       buffer += len;
       if (FIFO_Add(&Transmit_Queue, buffer, nbytes)) {
         rs485_silence_reset();
-    #if 0
-        /* disable the USART to generate interrupts on RX not empty */
-        USART_ITConfig(USART6, USART_IT_RXNE, DISABLE);
-        /* enable the USART to generate interrupts on TX empty */
-        USART_ITConfig(USART6, USART_IT_TXE, ENABLE);
-        /* TXE interrupt will load the first byte */
-    #endif
       }
+#endif        
     }
   }
   return status;
@@ -454,8 +479,10 @@ void rs485_init(void) {
   /* initialize the Rx and Tx byte queues */
   FIFO_Init(&Receive_Queue, &Receive_Queue_Data[0],
             (unsigned)sizeof(Receive_Queue_Data));
+#ifdef RS485_USE_TRANSMIT_QUEUE            
   FIFO_Init(&Transmit_Queue, &Transmit_Queue_Data[0],
             (unsigned)sizeof(Transmit_Queue_Data));
+#endif
 
   rs485_gpio_dev = device_get_binding("GPIO_1");
   if (rs485_gpio_dev == NULL) {
