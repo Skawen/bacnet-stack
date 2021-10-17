@@ -51,8 +51,15 @@ static int rs485_iface;
 const struct device *rs485_uart_dev;
 const struct device *rs485_gpio_dev;
 
+#ifdef CONFIG_SOC_NRF52840_QIAA
+#define BACNET_GPIO "GPIO_1"
 #define RS485_PIN_DE 10
 #define RS485_PIN_RE 12
+#else
+#define BACNET_GPIO "GPIO_0"
+#define RS485_PIN_DE 2
+#define RS485_PIN_RE 5
+#endif
 
 // struct modbus_context *rs485_ctx;
 
@@ -490,7 +497,7 @@ void rs485_init(void) {
   FIFO_Init(&Transmit_Queue, &Transmit_Queue_Data[0],
             (unsigned)sizeof(Transmit_Queue_Data));
 
-  rs485_gpio_dev = device_get_binding("GPIO_1");
+  rs485_gpio_dev = device_get_binding(BACNET_GPIO);
   if (rs485_gpio_dev == NULL) {
 		LOG_ERR("Failed to get GPIO_1 binding");
     return;
