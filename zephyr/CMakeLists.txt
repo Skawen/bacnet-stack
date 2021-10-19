@@ -228,7 +228,7 @@ set(BACNETSTACK_SRCS
     ${BACNETSTACK_SRC}/bacnet/config.h
     ${BACNETSTACK_SRC}/bacnet/cov.c
     ${BACNETSTACK_SRC}/bacnet/cov.h
-    ${BACNETSTACK_SRC}/bacnet/credential_authentication_factor.c
+    # ${BACNETSTACK_SRC}/bacnet/credential_authentication_factor.c
     ${BACNETSTACK_SRC}/bacnet/credential_authentication_factor.h
     ${BACNETSTACK_SRC}/bacnet/datalink/arcnet.h
     ${BACNETSTACK_SRC}/bacnet/datalink/bacsec.c
