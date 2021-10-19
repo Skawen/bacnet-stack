@@ -68,7 +68,7 @@ static const int Properties_Optional[] = { PROP_DESCRIPTION, PROP_RELIABILITY,
 #endif
     -1 };
 
-static const int Properties_Proprietary[] = { 9997, 9998, 9999, -1 };
+static const int Properties_Proprietary[] = { /*9997, 9998, 9999,*/ -1 };
 
 void Analog_Input_Property_Lists(
     const int **pRequired, const int **pOptional, const int **pProprietary)
@@ -96,7 +96,7 @@ void Analog_Input_Init(void)
     for (i = 0; i < MAX_ANALOG_INPUTS; i++) {
         AI_Descr[i].Present_Value = 0.0f;
         AI_Descr[i].Out_Of_Service = false;
-        AI_Descr[i].Units = UNITS_PERCENT;
+        AI_Descr[i].Units = UNITS_OHMS; // UNITS_PERCENT;
         AI_Descr[i].Reliability = RELIABILITY_NO_FAULT_DETECTED;
         AI_Descr[i].Prior_Value = 0.0f;
         AI_Descr[i].COV_Increment = 1.0f;
@@ -178,6 +178,7 @@ float Analog_Input_Present_Value(uint32_t object_instance)
         value = AI_Descr[index].Present_Value;
     }
 
+    // printf("Analog-Input[%d]: value %f.\n", object_instance, value);
     return value;
 }
 
@@ -222,7 +223,7 @@ bool Analog_Input_Object_Name(
 
     index = Analog_Input_Instance_To_Index(object_instance);
     if (index < MAX_ANALOG_INPUTS) {
-        sprintf(text_string, "ANALOG INPUT %lu", (unsigned long)index);
+        sprintf(text_string, "Channel %lu", (unsigned long)index + 3);
         status = characterstring_init_ansi(object_name, text_string);
     }
 
