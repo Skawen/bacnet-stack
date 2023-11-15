@@ -93,6 +93,7 @@ void datalink_set(char *datalink_string)
         datalink_cleanup = bip_cleanup;
         datalink_get_broadcast_address = bip_get_broadcast_address;
         datalink_get_my_address = bip_get_my_address;
+/*
     } else if (strcasecmp("bvlc", datalink_string) == 0) {
         datalink_init = bip_init;
         datalink_send_pdu = bvlc_send_pdu;
@@ -128,6 +129,7 @@ void datalink_set(char *datalink_string)
         datalink_cleanup = arcnet_cleanup;
         datalink_get_broadcast_address = arcnet_get_broadcast_address;
         datalink_get_my_address = arcnet_get_my_address;
+*/
     } else if (strcasecmp("mstp", datalink_string) == 0) {
         datalink_init = dlmstp_init;
         datalink_send_pdu = dlmstp_send_pdu;

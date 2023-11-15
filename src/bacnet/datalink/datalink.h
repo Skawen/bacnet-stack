@@ -28,7 +28,7 @@
 #include "bacnet/config.h"
 #include "bacnet/bacdef.h"
 
-#if defined(BACDL_ETHERNET)
+#if defined(BACDL_ETHERNET) && !defined(BACDL_ALL)
 #include "bacnet/datalink/ethernet.h"
 
 #define datalink_init ethernet_init
@@ -39,7 +39,7 @@
 #define datalink_get_my_address ethernet_get_my_address
 #define datalink_maintenance_timer(s)
 
-#elif defined(BACDL_ARCNET)
+#elif defined(BACDL_ARCNET )&& !defined(BACDL_ALL)
 #include "bacnet/datalink/arcnet.h"
 
 #define datalink_init arcnet_init
@@ -50,7 +50,7 @@
 #define datalink_get_my_address arcnet_get_my_address
 #define datalink_maintenance_timer(s)
 
-#elif defined(BACDL_MSTP)
+#elif defined(BACDL_MSTP) && !defined(BACDL_ALL)
 #include "bacnet/datalink/dlmstp.h"
 
 #define datalink_init dlmstp_init
@@ -61,7 +61,7 @@
 #define datalink_get_my_address dlmstp_get_my_address
 #define datalink_maintenance_timer(s)
 
-#elif defined(BACDL_BIP)
+#elif defined(BACDL_BIP) && !defined(BACDL_ALL)
 #include "bacnet/datalink/bip.h"
 #include "bacnet/datalink/bvlc.h"
 #include "bacnet/basic/bbmd/h_bbmd.h"
@@ -81,7 +81,7 @@ void routed_get_my_address(
 #endif
 #define datalink_maintenance_timer(s) bvlc_maintenance_timer(s)
 
-#elif defined(BACDL_BIP6)
+#elif defined(BACDL_BIP6) && !defined(BACDL_ALL)
 #include "bacnet/datalink/bip6.h"
 #include "bacnet/datalink/bvlc6.h"
 #include "bacnet/basic/bbmd6/h_bbmd6.h"
@@ -103,6 +103,36 @@ void routed_get_my_address(
 extern "C" {
 #endif /* __cplusplus */
 
+#if defined(BACDL_ALL)
+extern bool (*datalink_init)(char *ifname);
+
+/** Function template to send a packet via the DataLink.
+ * @ingroup DLTemplates
+ *
+ * @param dest [in] Destination address.
+ * @param npdu_data [in] The NPDU header (Network) information.
+ * @param pdu [in] Buffer of data to be sent - may be null.
+ * @param pdu_len [in] Number of bytes in the pdu buffer.
+ * @return Number of bytes sent on success, negative number on failure.
+ */
+extern int (*datalink_send_pdu)(BACNET_ADDRESS *dest,
+    BACNET_NPDU_DATA *npdu_data,
+    uint8_t *pdu,
+    unsigned pdu_len);
+
+extern uint16_t (*datalink_receive)(
+    BACNET_ADDRESS *src, uint8_t *pdu, uint16_t max_pdu, unsigned timeout);
+
+/** Function template to close the DataLink services and perform any cleanup.
+ * @ingroup DLTemplates
+ */
+extern void (*datalink_cleanup)(void);
+
+extern void (*datalink_get_broadcast_address)(BACNET_ADDRESS *dest);
+
+extern void (*datalink_get_my_address)(BACNET_ADDRESS *my_address);
+
+#else
     BACNET_STACK_EXPORT
     int datalink_send_pdu(
         BACNET_ADDRESS * dest,
@@ -134,11 +164,12 @@ extern "C" {
         char *ifname);
 
     BACNET_STACK_EXPORT
-    void datalink_set(
-        char *datalink_string);
+    void datalink_maintenance_timer(uint16_t seconds);
+#endif
 
     BACNET_STACK_EXPORT
-    void datalink_maintenance_timer(uint16_t seconds);
+    void datalink_set(
+        char *datalink_string);
 
 #ifdef __cplusplus
 }
