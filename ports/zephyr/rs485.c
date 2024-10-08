@@ -27,11 +27,11 @@
  */
 #include "rs485.h"
 
-#include <device.h>
-#include <devicetree.h>
-#include <drivers/gpio.h>
-#include <drivers/uart.h>
-#include <init.h>
+#include <zephyr/device.h>
+#include <zephyr/devicetree.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/uart.h>
+#include <zephyr/init.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -43,7 +43,7 @@
 #include "bacnet/datalink/mstpdef.h"
 // #include <modbus_internal.h>
 
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(bacnet_rs485, LOG_LEVEL_INF);
 
 /* Using modbus context for handling rs485 communication */
@@ -406,7 +406,7 @@ static void rs485_baud_rate_configure(void) {
 
   if (rs485_uart_dev == NULL) {
     LOG_ERR("Failed to get UART device BACNET");
-    /// log_strdup(cfg->dev_name));
+    /// cfg->dev_name);
     return;
   }
 
@@ -497,7 +497,9 @@ void rs485_init(void) {
   FIFO_Init(&Transmit_Queue, &Transmit_Queue_Data[0],
             (unsigned)sizeof(Transmit_Queue_Data));
 
-  rs485_gpio_dev = device_get_binding(BACNET_GPIO);
+  // rs485_gpio_dev = device_get_binding(BACNET_GPIO);
+  rs485_gpio_dev = DEVICE_DT_GET(DT_NODELABEL(gpio0));
+
   if (rs485_gpio_dev == NULL) {
 		LOG_ERR("Failed to get GPIO_1 binding");
     return;

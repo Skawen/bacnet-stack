@@ -60,10 +60,10 @@ typedef struct esf z_arch_esf_t;
 }
 #endif
 
-#include <sys/printk.h>
+#include <zephyr/sys/printk.h>
 #define PRINT printk
 
-#include <zephyr.h>
+#include <zephyr/kernel.h>
 
 #include <ztest_assert.h>
 #include <ztest_mock.h>

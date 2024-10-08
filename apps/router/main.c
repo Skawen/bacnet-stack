@@ -44,7 +44,7 @@
 #include <termios.h> /* used in kbhit() */
 #include <getopt.h>
 #include <sys/ioctl.h>
-#include <net/if.h>
+#include <zephyr/net/if.h>
 #include <pthread.h>
 #include <termios.h>
 #include "msgqueue.h"

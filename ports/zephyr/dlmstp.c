@@ -48,7 +48,7 @@
 #include "bacnet/basic/sys/ringbuf.h"
 #include "bacnet/basic/sys/mstimer.h"
 
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(bacnet_mstp, LOG_LEVEL_INF);
 
 /* This file has been customized for use with small microprocessors */

@@ -76,16 +76,16 @@
 #define ENUMS
 #include <sys/socket.h>
 #ifndef __CYGWIN__
-#include <net/route.h>
+#include <zephyr/net/route.h>
 #endif
-#include <net/if.h>
+#include <zephyr/net/if.h>
 #ifndef __CYGWIN__
-#include <net/if_arp.h>
+#include <zephyr/net/if_arp.h>
 #endif
 #include <features.h>   /* for the glibc version number */
 #if __GLIBC__ >= 2 && __GLIBC_MINOR >= 1
 #include <netpacket/packet.h>
-#include <net/ethernet.h>       /* the L2 protocols */
+#include <zephyr/net/ethernet.h>       /* the L2 protocols */
 #else
 #include <asm/types.h>
 #ifndef __CYGWIN__

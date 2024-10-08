@@ -5,15 +5,15 @@
  */
 
 #include <stdalign.h> /*TODO: Not std until C11! */
-#include <device.h>
-#include <init.h>
-#include <kernel.h>
-#include <net/net_if.h>
-#include <net/net_core.h>
-#include <net/net_context.h>
-#include <net/net_mgmt.h>
-#include <net/net_ip.h>
-#include <sys/printk.h>
+#include <zephyr/device.h>
+#include <zephyr/init.h>
+#include <zephyr/kernel.h>
+#include <zephyr/net/net_if.h>
+#include <zephyr/net/net_core.h>
+#include <zephyr/net/net_context.h>
+#include <zephyr/net/net_mgmt.h>
+#include <zephyr/net/net_ip.h>
+#include <zephyr/sys/printk.h>
 /* some BACnet modules we use */
 #include "bacnet/bacdef.h"
 #include "bacnet/config.h"
@@ -36,7 +36,7 @@
 #include "bacnet/basic/object/device.h"
 
 /* Logging module registration is already done in ports/zephyr/main.c */
-#include <logging/log.h>
+#include <zephyr/logging/log.h>
 LOG_MODULE_DECLARE(bacnet, CONFIG_BACNETSTACK_LOG_LEVEL);
 
 enum bacnet_server_msg_type {

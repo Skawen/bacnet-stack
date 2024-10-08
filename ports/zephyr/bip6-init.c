@@ -34,13 +34,13 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <device.h>
-#include <init.h>
-#include <kernel.h>
-#include <sys/printk.h>
-#include <net/net_ip.h>
-#include <net/socket.h>
-#include <net/socket_select.h>
+#include <zephyr/device.h>
+#include <zephyr/init.h>
+#include <zephyr/kernel.h>
+#include <zephyr/sys/printk.h>
+#include <zephyr/net/net_ip.h>
+#include <zephyr/net/socket.h>
+#include <zephyr/net/socket_select.h>
 #include "bacnet/bacdcode.h"
 #include "bacnet/bacint.h"
 #include "bacnet/datalink/bip6.h"
@@ -48,8 +48,8 @@
 #include "bacnet/basic/bbmd6/h_bbmd6.h"
 
 /* Logging module registration is already done in ports/zephyr/main.c */
-#include <logging/log.h>
-#include <logging/log_ctrl.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/logging/log_ctrl.h>
 
 LOG_MODULE_DECLARE(bacnet, CONFIG_BACNETSTACK_LOG_LEVEL);
 
@@ -439,13 +439,13 @@ void bip6_set_interface(char *ifname)
         for(x=0; x<NET_IF_MAX_IPV6_ADDR; x++)
         {
             inet6_ntoa(&interface->config.ip.ipv6->unicast[x].address.in6_addr );
-            LOG_INF("  unicast[%d]: %s", x, log_strdup(ipv6_addr_str));
+            LOG_INF("  unicast[%d]: %s", x, ipv6_addr_str);
         }
 
         for(x=0; x<NET_IF_MAX_IPV6_MADDR; x++)
         {
             inet6_ntoa(&interface->config.ip.ipv6->mcast[x].address.in6_addr );
-            LOG_INF(" multicast[%d]: %s", x, log_strdup(ipv6_addr_str));
+            LOG_INF(" multicast[%d]: %s", x, ipv6_addr_str);
         }
 
         if(CONFIG_BACDL_BIP6_ADDRESS_INDEX >= NET_IF_MAX_IPV6_ADDR)
@@ -468,8 +468,8 @@ void bip6_set_interface(char *ifname)
         bip6_set_addr(&unicast);
         bip6_set_broadcast_addr(&multicast);
 
-        LOG_INF("   Unicast: %s", log_strdup(inet6_ntoa((struct in6_addr*)&unicast.address)));
-        LOG_INF(" Multicast: %s", log_strdup(inet6_ntoa((struct in6_addr*)&multicast.address)));
+        LOG_INF("   Unicast: %s", inet6_ntoa((struct in6_addr*)&unicast.address));
+        LOG_INF(" Multicast: %s", inet6_ntoa((struct in6_addr*)&multicast.address));
     }
     else
     {
@@ -490,7 +490,7 @@ bool bip6_init(char *ifname)
     bip6_set_interface(ifname);
 
     if (BIP6_Address.s6_addr == 0) {
-        LOG_ERR("%s:%d - Failed to get an IPv6 address on interface: %s\n", THIS_FILE, __LINE__, log_strdup(ifname ? ifname : "[default]"));
+        LOG_ERR("%s:%d - Failed to get an IPv6 address on interface: %s\n", THIS_FILE, __LINE__, ifname ? ifname : "[default]");
         return false;
     }
 

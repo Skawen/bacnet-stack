@@ -9,13 +9,13 @@
 #ifndef __TC_UTIL_H__
 #define __TC_UTIL_H__
 
-#include <zephyr.h>
+#include <zephyr/kernel.h>
 
 #include <string.h>
 #ifdef CONFIG_SHELL
 #include <shell/shell.h>
 #endif
-#include <sys/printk.h>
+#include <zephyr/sys/printk.h>
 
 #if defined CONFIG_ZTEST_TC_UTIL_USER_OVERRIDE
 #include <tc_util_user_override.h>

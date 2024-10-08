@@ -15,7 +15,7 @@
 #if CONFIG_NATIVE_APPLICATION
 #include <sys/time.h>
 #else
-#include <posix/sys/time.h>
+#include <zephyr/posix/sys/time.h>
 #endif
 #include <time.h>
 #include "bacnet/datetime.h"

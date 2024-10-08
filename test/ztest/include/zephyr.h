@@ -15,7 +15,7 @@
 #define __ZEPHYR__
 #endif
 
-//GAS: rm? #include <kernel.h>
+//GAS: rm? #include <zephyr/kernel.h>
 
 //GAS: add?
 #define Z_STRINGIFY(x) #x

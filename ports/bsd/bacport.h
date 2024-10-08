@@ -75,13 +75,13 @@
 
 #define ENUMS
 #include <sys/socket.h>
-#include <net/route.h>
-#include <net/if.h>
-#include <net/if_var.h>
-#include <net/if_arp.h>
-#include <net/if_dl.h>
+#include <zephyr/net/route.h>
+#include <zephyr/net/if.h>
+#include <zephyr/net/if_var.h>
+#include <zephyr/net/if_arp.h>
+#include <zephyr/net/if_dl.h>
 #include <ifaddrs.h>
-#include <net/ethernet.h>       /* the L2 protocols */
+#include <zephyr/net/ethernet.h>       /* the L2 protocols */
 #include <netinet/in.h>
 #include <netinet/in_var.h>
 #include <arpa/inet.h>

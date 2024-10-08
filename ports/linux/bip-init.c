@@ -35,7 +35,7 @@
 #include <asm/types.h>
 #include <netinet/ether.h>
 #include <netinet/in.h>
-#include <net/if.h>
+#include <zephyr/net/if.h>
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <linux/netlink.h>

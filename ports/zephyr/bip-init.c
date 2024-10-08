@@ -34,13 +34,14 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <device.h>
-#include <init.h>
-#include <kernel.h>
-#include <sys/printk.h>
-#include <net/net_ip.h>
-#include <net/socket.h>
-#include <net/socket_select.h>
+#include <zephyr/device.h>
+#include <zephyr/init.h>
+#include <zephyr/kernel.h>
+#include <zephyr/sys/printk.h>
+#include <zephyr/net/net_if.h>
+#include <zephyr/net/net_ip.h>
+#include <zephyr/net/socket.h>
+#include <zephyr/net/socket_select.h>
 #include "bacnet/bacdcode.h"
 #include "bacnet/bacint.h"
 #include "bacnet/datalink/bip.h"
@@ -48,8 +49,8 @@
 #include "bacnet/basic/bbmd/h_bbmd.h"
 
 /* Logging module registration is already done in ports/zephyr/main.c */
-#include <logging/log.h>
-#include <logging/log_ctrl.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/logging/log_ctrl.h>
 
 LOG_MODULE_DECLARE(bacnet, CONFIG_BACNETSTACK_LOG_LEVEL);
 
@@ -104,7 +105,7 @@ char* inet_ntoa(struct in_addr *a)
 static void debug_print_ipv4(const char *str, const struct in_addr *addr,
     const unsigned int port, const unsigned int count)
 {
-    LOG_DBG("%s %s:%hu (%u bytes)", log_strdup(str), log_strdup(inet_ntoa((struct in_addr*) &addr)),
+    LOG_DBG("%s %s:%hu (%u bytes)", str, inet_ntoa((struct in_addr*) &addr),
         ntohs(port), count);
 }
 
@@ -487,21 +488,30 @@ void bip_set_interface(char *ifname)
         LOG_INF("Using IPv4 address at index %d", CONFIG_BACDL_BIP_ADDRESS_INDEX);
 
         /* Build the broadcast address from the unicast and netmask */
+        /*
+        struct net_if_addr *if_addr = &iface->config.ip.ipv4->unicast[index];
+        for (x = 0; x < IP_ADDRESS_MAX; x++) {
+            unicast.address[x] = if_addr->address.in_addr.s4_addr[x];
+            broadcast.address[x] = if_addr->address.in_addr.s4_addr[x] |
+                ~iface->config.ip.ipv4->netmask.s4_addr[x];
+        }
+        */
+
         for(x=0; x<IP_ADDRESS_MAX; x++)
         {
-            broadcast.address[x] = interface->config.ip.ipv4->unicast[CONFIG_BACDL_BIP_ADDRESS_INDEX].address.in_addr.s4_addr[x] |
-                ~interface->config.ip.ipv4->netmask.s4_addr[x];
+            broadcast.address[x] = interface->config.ip.ipv4->unicast[CONFIG_BACDL_BIP_ADDRESS_INDEX].ipv4.address.in_addr.s4_addr[x] |
+                ~interface->config.ip.ipv4->unicast[CONFIG_BACDL_BIP_ADDRESS_INDEX].netmask.s4_addr[x];
 
-            unicast.address[x] = interface->config.ip.ipv4->unicast[CONFIG_BACDL_BIP_ADDRESS_INDEX].address.in_addr.s4_addr[x];
+            unicast.address[x] = interface->config.ip.ipv4->unicast[CONFIG_BACDL_BIP_ADDRESS_INDEX].ipv4.address.in_addr.s4_addr[x];
         }
 
         bip_set_addr(&unicast);
         bip_set_broadcast_addr(&broadcast);
 
         /* net_if -> net_if_config . net_if_ip . net_if_ipv4 -> net_if_addr . net_addr . in_addr . s4_addr[4] */
-        LOG_INF("   Unicast: %s", log_strdup(inet_ntoa(&interface->config.ip.ipv4->unicast->address.in_addr))); 
-        LOG_INF(" Broadcast: %s", log_strdup(inet_ntoa(&BIP_Broadcast_Addr)));
-        LOG_INF("   Netmask: %s", log_strdup(inet_ntoa(&interface->config.ip.ipv4->netmask)) );
+        LOG_INF("   Unicast: %s", inet_ntoa(&interface->config.ip.ipv4->unicast[CONFIG_BACDL_BIP_ADDRESS_INDEX].ipv4.address.in_addr)); 
+        LOG_INF(" Broadcast: %s", inet_ntoa(&BIP_Broadcast_Addr));
+        LOG_INF("   Netmask: %s", inet_ntoa(&interface->config.ip.ipv4->unicast[CONFIG_BACDL_BIP_ADDRESS_INDEX].netmask));
     }
     else
     {
@@ -536,7 +546,7 @@ bool bip_init(char *ifname)
     bip_set_interface(ifname);
 
     if (BIP_Address.s_addr == 0) {
-        LOG_ERR("%s:%d - Failed to get an IP address on interface: %s\n", THIS_FILE, __LINE__, log_strdup(ifname ? ifname : "[default]"));
+        LOG_ERR("%s:%d - Failed to get an IP address on interface: %s\n", THIS_FILE, __LINE__, ifname ? ifname : "[default]");
         return false;
     }
 
